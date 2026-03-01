@@ -1,0 +1,30 @@
+import logging
+
+import asyncpg
+
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+pool: asyncpg.Pool | None = None
+
+
+async def init_pool() -> None:
+    global pool
+    logger.info("Initializing database connection pool")
+    pool = await asyncpg.create_pool(settings.database_url, min_size=2, max_size=10)
+    logger.info("Database pool ready (min=2, max=10)")
+
+
+async def close_pool() -> None:
+    global pool
+    if pool:
+        logger.info("Closing database connection pool")
+        await pool.close()
+        pool = None
+
+
+async def get_pool() -> asyncpg.Pool:
+    if pool is None:
+        raise RuntimeError("Database pool not initialized")
+    return pool
