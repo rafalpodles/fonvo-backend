@@ -16,9 +16,16 @@ logging.basicConfig(
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_pool()
+    try:
+        await init_pool()
+    except Exception as e:
+        logger.error("Failed to initialize database pool: %s", e)
+        # App still starts — health endpoint works, DB endpoints will fail gracefully
     yield
     await close_pool()
 
