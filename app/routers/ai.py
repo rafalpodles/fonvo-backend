@@ -223,6 +223,13 @@ async def extract_vocabulary(
         return []
 
 
+@router.post("/credentials")
+async def get_credentials(user_id: UUID = Depends(get_current_user)):
+    """Return OpenAI API key for direct client-side calls."""
+    logger.info("Credentials request from user %s", user_id)
+    return {"openai_api_key": settings.openai_api_key}
+
+
 @router.post("/realtime-token", response_model=RealtimeTokenResponse)
 async def create_realtime_token(
     request: RealtimeTokenRequest,
