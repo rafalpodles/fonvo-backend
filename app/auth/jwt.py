@@ -43,11 +43,20 @@ async def verify_supabase_jwt(token: str) -> dict:
         if matching_key is None:
             raise ValueError(f"No matching JWK for kid={kid}")
 
-    public_key = jwt.algorithms.RSAAlgorithm.from_jwk(matching_key)
+    kty = matching_key.get("kty", "RSA")
+    alg = matching_key.get("alg", "RS256")
+
+    if kty == "EC":
+        public_key = jwt.algorithms.ECAlgorithm.from_jwk(matching_key)
+        algorithms = [alg] if alg else ["ES256"]
+    else:
+        public_key = jwt.algorithms.RSAAlgorithm.from_jwk(matching_key)
+        algorithms = [alg] if alg else ["RS256"]
+
     payload = jwt.decode(
         token,
         public_key,
-        algorithms=["RS256"],
+        algorithms=algorithms,
         audience=settings.jwt_audience,
         issuer=settings.jwt_issuer,
     )
