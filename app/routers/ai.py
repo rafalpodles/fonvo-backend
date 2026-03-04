@@ -230,6 +230,7 @@ async def get_credentials(user_id: UUID = Depends(get_current_user)):
     return {
         "openai_api_key": settings.openai_api_key,
         "eleven_labs_api_key": settings.eleven_labs_api_key or None,
+        "openrouter_api_key": settings.openrouter_api_key or None,
     }
 
 
