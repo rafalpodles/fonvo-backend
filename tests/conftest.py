@@ -13,6 +13,7 @@ os.environ.setdefault("OPENAI_API_KEY", "sk-test-key")
 os.environ.setdefault("JWT_ISSUER", "https://test.supabase.co/auth/v1")
 
 TEST_USER_ID = UUID("11111111-1111-1111-1111-111111111111")
+TEST_DEVICE_ID = "test-device-00000000-0000-0000-0000-000000000001"
 
 
 @pytest.fixture
@@ -26,17 +27,40 @@ def mock_pool():
 
 @pytest.fixture
 def app(mock_pool):
-    from app.auth.dependencies import get_current_user
+    from app.auth.dependencies import CallerIdentity, get_current_user, get_user_or_guest
     from app.db.connection import get_pool
     from app.main import app
 
     async def override_get_current_user():
         return TEST_USER_ID
 
+    async def override_get_user_or_guest():
+        return CallerIdentity(user_id=TEST_USER_ID)
+
     async def override_get_pool():
         return mock_pool
 
     app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[get_user_or_guest] = override_get_user_or_guest
+    app.dependency_overrides[get_pool] = override_get_pool
+    yield app
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def guest_app(mock_pool):
+    """App configured with guest (device-only) identity."""
+    from app.auth.dependencies import CallerIdentity, get_user_or_guest
+    from app.db.connection import get_pool
+    from app.main import app
+
+    async def override_get_user_or_guest():
+        return CallerIdentity(device_id=TEST_DEVICE_ID)
+
+    async def override_get_pool():
+        return mock_pool
+
+    app.dependency_overrides[get_user_or_guest] = override_get_user_or_guest
     app.dependency_overrides[get_pool] = override_get_pool
     yield app
     app.dependency_overrides.clear()
@@ -50,5 +74,18 @@ async def client(app):
 
 
 @pytest.fixture
+async def guest_client(guest_app):
+    """Client with guest identity (X-Device-Id only, no Bearer token)."""
+    transport = ASGITransport(app=guest_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c
+
+
+@pytest.fixture
 def auth_headers():
     return {"Authorization": "Bearer test-jwt-token"}
+
+
+@pytest.fixture
+def guest_headers():
+    return {"X-Device-Id": TEST_DEVICE_ID}

@@ -33,6 +33,11 @@ class AnalyzedError(BaseModel):
     message_index: int | None = None
 
 
+class AnalyzeErrorsResponse(BaseModel):
+    errors: list[AnalyzedError]
+    detected_level: str | None = None
+
+
 class SummarizeRequest(BaseModel):
     messages: list[dict]
     language: str

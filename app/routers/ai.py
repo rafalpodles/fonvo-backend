@@ -1,17 +1,17 @@
 import json
 import logging
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, Response, UploadFile, Form
 from openai import AsyncOpenAI
 from sse_starlette.sse import EventSourceResponse
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import CallerIdentity, get_user_or_guest
 from app.config import settings
 from app.models.ai import (
     AnalyzeErrorsRequest,
+    AnalyzeErrorsResponse,
     AnalyzedError,
     ChatRequest,
     ExtractedVocabItem,
@@ -32,11 +32,11 @@ openai_client = AsyncOpenAI()
 @router.post("/chat")
 async def chat(
     request: ChatRequest,
-    user_id: UUID = Depends(get_current_user),
+    caller: CallerIdentity = Depends(get_user_or_guest),
 ):
     model = request.model or "gpt-4o"
     max_tokens = request.max_tokens or 500
-    logger.info("Chat request from user %s (model=%s)", user_id, model)
+    logger.info("Chat request from %s (model=%s)", caller.log_id, model)
 
     stream = await openai_client.chat.completions.create(
         model=model,
@@ -75,9 +75,9 @@ async def chat(
 @router.post("/tts")
 async def text_to_speech(
     request: TTSRequest,
-    user_id: UUID = Depends(get_current_user),
+    caller: CallerIdentity = Depends(get_user_or_guest),
 ):
-    logger.info("TTS request from user %s (voice=%s, %d chars)", user_id, request.voice, len(request.text))
+    logger.info("TTS request from %s (voice=%s, %d chars)", caller.log_id, request.voice, len(request.text))
     response = await openai_client.audio.speech.create(
         model=request.model,
         voice=request.voice,
@@ -91,9 +91,9 @@ async def text_to_speech(
 async def speech_to_text(
     file: UploadFile,
     language: str = Form(...),
-    user_id: UUID = Depends(get_current_user),
+    caller: CallerIdentity = Depends(get_user_or_guest),
 ):
-    logger.info("STT request from user %s (language=%s)", user_id, language)
+    logger.info("STT request from %s (language=%s)", caller.log_id, language)
     audio_data = await file.read()
     transcript = await openai_client.audio.transcriptions.create(
         model="whisper-1",
@@ -103,20 +103,35 @@ async def speech_to_text(
     return STTResponse(text=transcript.text)
 
 
-@router.post("/analyze-errors", response_model=list[AnalyzedError])
+@router.post("/analyze-errors", response_model=AnalyzeErrorsResponse)
 async def analyze_errors(
     request: AnalyzeErrorsRequest,
-    user_id: UUID = Depends(get_current_user),
+    caller: CallerIdentity = Depends(get_user_or_guest),
 ):
-    logger.info("Analyze errors request from user %s", user_id)
+    logger.info("Analyze errors request from %s", caller.log_id)
+
+    detect_level = request.language_level == "auto"
+
+    level_instruction = ""
+    if detect_level:
+        level_instruction = (
+            "Also estimate the student's CEFR level (A1, A2, B1, B2, C1, or C2) "
+            "based on their vocabulary range, grammatical complexity, and error patterns. "
+            'Include a "detected_level" field in your response. '
+        )
+        level_context = "unknown"
+    else:
+        level_context = request.language_level
+
     system_prompt = (
         f"You are a language teacher analyzing a student's {request.language} conversation "
-        f"at {request.language_level} level. Find grammatical, vocabulary, structural, "
+        f"at {level_context} level. Find grammatical, vocabulary, structural, "
         f"and pronunciation errors in the student's messages only. "
-        f"Return a JSON array of objects with fields: "
+        f"{level_instruction}"
+        f"Return a JSON object with an \"errors\" array of objects with fields: "
         f"original_text, corrected_text, explanation, error_type "
         f"(one of: grammar, vocabulary, structure, pronunciation). "
-        f"If no errors found, return an empty array []."
+        f"If no errors found, use an empty array for \"errors\"."
     )
     messages = [{"role": "system", "content": system_prompt}]
     student_msgs = [
@@ -125,7 +140,7 @@ async def analyze_errors(
         if m.get("role") == "user"
     ]
     if not student_msgs:
-        return []
+        return AnalyzeErrorsResponse(errors=[], detected_level=None)
 
     messages.append({"role": "user", "content": "\n".join(student_msgs)})
 
@@ -136,23 +151,24 @@ async def analyze_errors(
         temperature=0.3,
         response_format={"type": "json_object"},
     )
-    content = response.choices[0].message.content or "[]"
+    content = response.choices[0].message.content or "{}"
     try:
         parsed = json.loads(content)
-        if isinstance(parsed, dict):
-            parsed = parsed.get("errors", [])
-        return [AnalyzedError(**e) for e in parsed]
+        errors_data = parsed.get("errors", []) if isinstance(parsed, dict) else parsed
+        errors = [AnalyzedError(**e) for e in errors_data]
+        detected_level = parsed.get("detected_level") if detect_level and isinstance(parsed, dict) else None
+        return AnalyzeErrorsResponse(errors=errors, detected_level=detected_level)
     except (json.JSONDecodeError, TypeError):
         logger.error("Failed to parse error analysis response: %s", content)
-        return []
+        return AnalyzeErrorsResponse(errors=[], detected_level=None)
 
 
 @router.post("/summarize", response_model=SummarizeResponse)
 async def summarize(
     request: SummarizeRequest,
-    user_id: UUID = Depends(get_current_user),
+    caller: CallerIdentity = Depends(get_user_or_guest),
 ):
-    logger.info("Summarize request from user %s", user_id)
+    logger.info("Summarize request from %s", caller.log_id)
     system_prompt = (
         f"Summarize this {request.language} conversation in one sentence in English. "
         f"Focus on the topic discussed."
@@ -187,9 +203,9 @@ async def summarize(
 @router.post("/extract-vocabulary", response_model=list[ExtractedVocabItem])
 async def extract_vocabulary(
     request: ExtractVocabRequest,
-    user_id: UUID = Depends(get_current_user),
+    caller: CallerIdentity = Depends(get_user_or_guest),
 ):
-    logger.info("Extract vocabulary request from user %s", user_id)
+    logger.info("Extract vocabulary request from %s", caller.log_id)
     system_prompt = (
         f"Extract 3-8 useful vocabulary items from this {request.language} conversation "
         f"for a {request.language_level} level student. "
@@ -224,9 +240,9 @@ async def extract_vocabulary(
 
 
 @router.post("/credentials")
-async def get_credentials(user_id: UUID = Depends(get_current_user)):
+async def get_credentials(caller: CallerIdentity = Depends(get_user_or_guest)):
     """Return AI provider API keys for direct client-side calls."""
-    logger.info("Credentials request from user %s", user_id)
+    logger.info("Credentials request from %s", caller.log_id)
     return {
         "openai_api_key": settings.openai_api_key,
         "eleven_labs_api_key": settings.eleven_labs_api_key or None,
@@ -237,9 +253,9 @@ async def get_credentials(user_id: UUID = Depends(get_current_user)):
 @router.post("/realtime-token", response_model=RealtimeTokenResponse)
 async def create_realtime_token(
     request: RealtimeTokenRequest,
-    user_id: UUID = Depends(get_current_user),
+    caller: CallerIdentity = Depends(get_user_or_guest),
 ):
-    logger.info("Realtime token request from user %s (model=%s)", user_id, request.model)
+    logger.info("Realtime token request from %s (model=%s)", caller.log_id, request.model)
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             "https://api.openai.com/v1/realtime/sessions",

@@ -45,3 +45,20 @@ async def test_missing_bearer_prefix(unauthenticated_client):
         headers={"Authorization": "just-a-token"},
     )
     assert resp.status_code == 401
+
+
+async def test_guest_with_device_id_can_access_ai(unauthenticated_client):
+    """Guest with X-Device-Id can access AI endpoints (credentials)."""
+    resp = await unauthenticated_client.post(
+        "/api/v1/ai/credentials",
+        headers={"X-Device-Id": "test-device-id"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "openai_api_key" in data
+
+
+async def test_guest_without_any_auth_rejected(unauthenticated_client):
+    """No Bearer token and no X-Device-Id → 401."""
+    resp = await unauthenticated_client.post("/api/v1/ai/credentials")
+    assert resp.status_code == 401
