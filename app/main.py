@@ -1,14 +1,17 @@
 import logging
 from contextlib import asynccontextmanager
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.db.connection import close_pool, init_pool
 from app.middleware.error_handler import global_exception_handler
 from app.middleware.logging import RequestLoggingMiddleware
-from app.routers import ai, conversations, health, preferences, profiles, streaks, vocabulary
+from app.routers import admin, ai, config, conversations, health, preferences, profiles, streaks, vocabulary
 
 logging.basicConfig(
     level=logging.INFO,
@@ -48,3 +51,10 @@ app.include_router(streaks.router, prefix="/api/v1")
 app.include_router(preferences.router, prefix="/api/v1")
 app.include_router(profiles.router, prefix="/api/v1")
 app.include_router(ai.router, prefix="/api/v1")
+app.include_router(config.router, prefix="/api/v1")
+app.include_router(admin.router, prefix="/api/v1")
+
+# Serve admin UI static files
+_static_dir = Path(__file__).resolve().parent.parent / "static" / "admin"
+if _static_dir.is_dir():
+    app.mount("/admin", StaticFiles(directory=str(_static_dir), html=True), name="admin")

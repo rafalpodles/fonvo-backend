@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     jwt_issuer: str = ""
     cors_origins: str = "*"
 
+    # Admin panel auth
+    admin_username: str = "admin"
+    admin_password_hash: str = ""
+    admin_jwt_secret: str = ""
+
     model_config = {"env_file": ".env"}
 
 
