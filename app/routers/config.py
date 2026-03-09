@@ -107,6 +107,19 @@ async def update_prompt(
     return prompt
 
 
+@router.delete("/prompts/{key:path}", status_code=204)
+async def delete_prompt(
+    key: str,
+    pool: asyncpg.Pool = Depends(get_pool),
+    _admin: str = Depends(require_admin),
+):
+    """Soft-delete a prompt by key (admin)."""
+    deleted = await queries.delete_prompt(pool, key)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Prompt '{key}' not found")
+    _invalidate_cache()
+
+
 # ── Model config endpoints ───────────────────────────────────
 
 

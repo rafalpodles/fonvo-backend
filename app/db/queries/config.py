@@ -122,6 +122,14 @@ async def update_model_config(
     return result == "UPDATE 1"
 
 
+async def delete_prompt(pool: asyncpg.Pool, key: str) -> bool:
+    result = await pool.execute(
+        "UPDATE ai_prompts SET is_active = false, updated_at = now() WHERE key = $1 AND is_active = true",
+        key,
+    )
+    return result == "UPDATE 1"
+
+
 async def delete_model_config(pool: asyncpg.Pool, key: str) -> bool:
     result = await pool.execute(
         "UPDATE ai_model_config SET is_active = false, updated_at = now() WHERE key = $1 AND is_active = true",
