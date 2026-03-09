@@ -120,3 +120,11 @@ async def update_model_config(
     query = f"UPDATE ai_model_config SET {', '.join(sets)} WHERE key = $1 AND is_active = true"
     result = await pool.execute(query, *params)
     return result == "UPDATE 1"
+
+
+async def delete_model_config(pool: asyncpg.Pool, key: str) -> bool:
+    result = await pool.execute(
+        "UPDATE ai_model_config SET is_active = false, updated_at = now() WHERE key = $1 AND is_active = true",
+        key,
+    )
+    return result == "UPDATE 1"

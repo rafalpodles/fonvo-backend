@@ -138,3 +138,16 @@ async def update_model_config(
     if not model:
         raise HTTPException(status_code=404, detail=f"Model config '{key}' not found")
     return model
+
+
+@router.delete("/models/{key:path}", status_code=204)
+async def delete_model_config(
+    key: str,
+    pool: asyncpg.Pool = Depends(get_pool),
+    _admin: str = Depends(require_admin),
+):
+    """Soft-delete a model config by key (admin)."""
+    deleted = await queries.delete_model_config(pool, key)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Model config '{key}' not found")
+    _invalidate_cache()
