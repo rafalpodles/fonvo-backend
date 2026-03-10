@@ -64,6 +64,7 @@ def _parse_conversation_row(row: asyncpg.Record) -> ConversationResponse:
         language_level=row["language_level"],
         target_language=row["target_language"],
         summary=row["summary"],
+        detected_level=row.get("detected_level"),
         token_usage=TokenUsage(**token_usage_raw),
         updated_at=row["updated_at"],
         messages=messages,
@@ -74,7 +75,7 @@ def _parse_conversation_row(row: asyncpg.Record) -> ConversationResponse:
 
 _BASE_QUERY = """
     SELECT c.id, c.started_at, c.ended_at, c.topic, c.language_level,
-           c.target_language, c.summary, c.token_usage, c.updated_at,
+           c.target_language, c.summary, c.detected_level, c.token_usage, c.updated_at,
            COALESCE(
                json_agg(DISTINCT jsonb_build_object(
                    'id', m.id, 'role', m.role, 'content', m.content,
@@ -155,10 +156,11 @@ async def save_conversation(
                 """
                 INSERT INTO conversations
                     (id, user_id, topic, language_level, target_language,
-                     summary, token_usage, started_at, ended_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, now())
+                     summary, detected_level, token_usage, started_at, ended_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, now())
                 ON CONFLICT (id) DO UPDATE SET
                     summary = EXCLUDED.summary,
+                    detected_level = COALESCE(EXCLUDED.detected_level, conversations.detected_level),
                     ended_at = EXCLUDED.ended_at,
                     token_usage = EXCLUDED.token_usage,
                     updated_at = now()
@@ -169,6 +171,7 @@ async def save_conversation(
                 conv.language_level,
                 conv.target_language,
                 conv.summary,
+                conv.detected_level,
                 token_usage_json,
                 conv.started_at,
                 conv.ended_at,
@@ -224,6 +227,63 @@ async def save_conversation(
                         for mid, text in conv.translations.items()
                     ],
                 )
+
+            # Auto-update language level based on rolling median
+            if conv.detected_level:
+                await _update_language_level_if_changed(conn, user_id, conv.target_language)
+
+
+_LEVEL_ORDER = ["a1", "a2", "b1", "b2", "c1", "c2"]
+
+
+async def _update_language_level_if_changed(
+    conn: asyncpg.Connection, user_id: UUID, language: str
+) -> None:
+    """Compute median detected_level from last 5 conversations and update preferences."""
+    rows = await conn.fetch(
+        """
+        SELECT detected_level FROM conversations
+        WHERE user_id = $1 AND target_language = $2 AND detected_level IS NOT NULL
+        ORDER BY started_at DESC LIMIT 5
+        """,
+        user_id,
+        language,
+    )
+    if len(rows) < 2:
+        return
+
+    levels = [r["detected_level"].lower() for r in rows if r["detected_level"].lower() in _LEVEL_ORDER]
+    if not levels:
+        return
+
+    # Compute median by index
+    indices = sorted([_LEVEL_ORDER.index(lv) for lv in levels])
+    median_level = _LEVEL_ORDER[indices[len(indices) // 2]]
+
+    # Read current language_levels from preferences
+    pref_row = await conn.fetchrow(
+        "SELECT language_levels FROM user_preferences WHERE user_id = $1", user_id
+    )
+    if pref_row is None:
+        return
+
+    current_levels = pref_row["language_levels"] or {}
+    if isinstance(current_levels, str):
+        current_levels = json.loads(current_levels)
+
+    if current_levels.get(language) == median_level:
+        return
+
+    current_levels[language] = median_level
+    await conn.execute(
+        "UPDATE user_preferences SET language_levels = $2::jsonb, updated_at = now() WHERE user_id = $1",
+        user_id,
+        json.dumps(current_levels),
+    )
+    logger.info(
+        "Updated language level for user %s, language %s: %s (median of %d detections)",
+        user_id, language, median_level, len(levels),
+    )
 
 
 async def delete_conversation(pool: asyncpg.Pool, user_id: UUID, conversation_id: UUID) -> bool:

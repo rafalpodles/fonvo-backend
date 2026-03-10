@@ -38,6 +38,7 @@ class ConversationResponse(BaseModel):
     language_level: str
     target_language: str
     summary: str | None
+    detected_level: str | None = None
     token_usage: TokenUsage
     updated_at: datetime
     messages: list[MessageResponse]
@@ -53,6 +54,7 @@ class ConversationSaveRequest(BaseModel):
     language_level: str
     target_language: str
     summary: str | None = None
+    detected_level: str | None = None
     token_usage: TokenUsage = TokenUsage()
     messages: list[MessageResponse]
     errors: list[ConversationErrorResponse] = []
