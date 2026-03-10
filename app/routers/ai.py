@@ -247,6 +247,7 @@ async def get_credentials(caller: CallerIdentity = Depends(get_user_or_guest)):
         "openai_api_key": settings.openai_api_key,
         "eleven_labs_api_key": settings.eleven_labs_api_key or None,
         "openrouter_api_key": settings.openrouter_api_key or None,
+        "fish_audio_api_key": settings.fish_audio_api_key or None,
     }
 
 

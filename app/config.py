@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     openai_api_key: str
     eleven_labs_api_key: str = ""
     openrouter_api_key: str = ""
+    fish_audio_api_key: str = ""
     jwt_audience: str = "authenticated"
     jwt_issuer: str = ""
     cors_origins: str = "*"
