@@ -12,7 +12,12 @@ pool: asyncpg.Pool | None = None
 async def init_pool() -> None:
     global pool
     logger.info("Initializing database connection pool")
-    pool = await asyncpg.create_pool(settings.database_url, min_size=2, max_size=10)
+    pool = await asyncpg.create_pool(
+        settings.database_url,
+        min_size=2,
+        max_size=10,
+        statement_cache_size=0,
+    )
     logger.info("Database pool ready (min=2, max=10)")
 
 
