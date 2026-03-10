@@ -24,7 +24,8 @@ const MODEL_PRESETS = {
     { provider: 'openai', model_id: 'tts-1', display_name: 'OpenAI TTS-1', note: 'Low latency, lower quality' },
     { provider: 'openai', model_id: 'tts-1-hd', display_name: 'OpenAI TTS-1 HD', note: 'Best OpenAI quality' },
     { provider: 'openai', model_id: 'gpt-4o-mini-tts', display_name: 'OpenAI GPT-4o Mini TTS', note: 'Tone/emotion control' },
-    { provider: 'fish_audio', model_id: 'speech-1.5', display_name: 'Fish Audio S1', note: '#1 TTS Arena, ~$15/1M chars' },
+    { provider: 'fish_audio', model_id: 's2-pro', display_name: 'Fish Audio S2-Pro', note: 'Best quality, 80+ langs, 100ms' },
+    { provider: 'fish_audio', model_id: 's2', display_name: 'Fish Audio S2', note: 'Fast, 80+ langs' },
   ],
   tts_streaming: [
     { provider: 'elevenlabs', model_id: 'eleven_flash_v2_5', display_name: 'ElevenLabs Flash v2.5', note: 'WebSocket streaming' },
