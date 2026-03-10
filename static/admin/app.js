@@ -15,6 +15,36 @@ let dirtyPrompts = new Set();
 let dirtyModels = new Set();
 let currentTab = 'prompts';
 
+// Model presets for quick selection in admin UI
+const MODEL_PRESETS = {
+  tts: [
+    { provider: 'elevenlabs', model_id: 'eleven_flash_v2_5', display_name: 'ElevenLabs Flash v2.5', note: '<75ms latency, 32 langs' },
+    { provider: 'elevenlabs', model_id: 'eleven_v3', display_name: 'ElevenLabs v3', note: 'Best quality, 70+ langs' },
+    { provider: 'elevenlabs', model_id: 'eleven_turbo_v2_5', display_name: 'ElevenLabs Turbo v2.5', note: 'Balanced latency/quality' },
+    { provider: 'openai', model_id: 'tts-1', display_name: 'OpenAI TTS-1', note: 'Low latency, lower quality' },
+    { provider: 'openai', model_id: 'tts-1-hd', display_name: 'OpenAI TTS-1 HD', note: 'Best OpenAI quality' },
+    { provider: 'openai', model_id: 'gpt-4o-mini-tts', display_name: 'OpenAI GPT-4o Mini TTS', note: 'Tone/emotion control' },
+  ],
+  tts_streaming: [
+    { provider: 'elevenlabs', model_id: 'eleven_flash_v2_5', display_name: 'ElevenLabs Flash v2.5', note: 'WebSocket streaming' },
+    { provider: 'elevenlabs', model_id: 'eleven_v3', display_name: 'ElevenLabs v3', note: 'Best quality streaming' },
+    { provider: 'elevenlabs', model_id: 'eleven_turbo_v2_5', display_name: 'ElevenLabs Turbo v2.5', note: 'Balanced streaming' },
+  ],
+  stt: [
+    { provider: 'openai', model_id: 'gpt-4o-mini-transcribe', display_name: 'OpenAI GPT-4o Mini Transcribe', note: '~320ms, good accuracy' },
+    { provider: 'openai', model_id: 'gpt-4o-transcribe', display_name: 'OpenAI GPT-4o Transcribe', note: 'Best OpenAI accuracy' },
+    { provider: 'openai', model_id: 'whisper-1', display_name: 'OpenAI Whisper', note: 'Legacy, 99 langs' },
+    { provider: 'elevenlabs', model_id: 'scribe_v2', display_name: 'ElevenLabs Scribe v2', note: '150ms, fastest STT' },
+  ],
+  chat: [
+    { provider: 'openai', model_id: 'gpt-4o', display_name: 'GPT-4o', note: 'Default chat model' },
+    { provider: 'openai', model_id: 'gpt-4o-mini', display_name: 'GPT-4o Mini', note: 'Faster, cheaper' },
+    { provider: 'openrouter', model_id: 'google/gemini-2.5-flash', display_name: 'Gemini 2.5 Flash', note: 'Via OpenRouter' },
+    { provider: 'openrouter', model_id: 'google/gemini-2.5-pro', display_name: 'Gemini 2.5 Pro', note: 'Via OpenRouter' },
+    { provider: 'openrouter', model_id: 'anthropic/claude-sonnet-4.6', display_name: 'Claude Sonnet 4.6', note: 'Via OpenRouter' },
+  ],
+};
+
 // Category definitions for prompt grouping
 const PROMPT_CATEGORIES = [
   { prefix: 'conversation.', label: 'Conversation' },
@@ -377,7 +407,23 @@ function renderModelList() {
     return;
   }
 
-  container.innerHTML = models.map(m => `
+  container.innerHTML = models.map(m => {
+    const presets = MODEL_PRESETS[m.key] || [];
+    const presetDropdown = presets.length > 0 ? `
+      <div class="mb-4">
+        <label class="block text-xs font-medium text-gray-500 mb-1">Quick Select</label>
+        <select onchange="applyPreset('${m.key}', this.value)" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none bg-white">
+          <option value="">— Choose a preset —</option>
+          ${presets.map((p, i) => `<option value="${i}" ${p.model_id === m.model_id ? 'selected' : ''}>${p.display_name} — ${p.note}</option>`).join('')}
+        </select>
+      </div>
+    ` : '';
+
+    const extraJson = m.extra_config && Object.keys(m.extra_config).length > 0
+      ? JSON.stringify(m.extra_config, null, 2)
+      : '{}';
+
+    return `
     <div class="model-card${dirtyModels.has(m.key) ? ' dirty' : ''}" id="model-${m.key}">
       <div class="flex items-start justify-between mb-4">
         <div>
@@ -389,6 +435,7 @@ function renderModelList() {
           <button onclick="saveModel('${m.key}')" class="model-save-btn px-4 py-1.5 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 disabled:opacity-50 transition-colors">Save</button>
         </div>
       </div>
+      ${presetDropdown}
       <div class="grid grid-cols-3 gap-4">
         <div>
           <label class="block text-xs font-medium text-gray-500 mb-1">Provider</label>
@@ -403,19 +450,28 @@ function renderModelList() {
           <input type="text" value="${escapeAttr(m.display_name || '')}" class="model-display-name w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none" oninput="markModelDirty('${m.key}')">
         </div>
       </div>
-      ${m.extra_config && Object.keys(m.extra_config).length > 0 ? `
-        <div class="mt-3">
-          <label class="block text-xs font-medium text-gray-500 mb-1">Extra Config (JSON)</label>
-          <textarea class="model-extra-config w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none resize-none" rows="2" oninput="markModelDirty('${m.key}')">${escapeHtml(JSON.stringify(m.extra_config, null, 2))}</textarea>
-        </div>
-      ` : `
-        <div class="mt-3">
-          <label class="block text-xs font-medium text-gray-500 mb-1">Extra Config (JSON)</label>
-          <textarea class="model-extra-config w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none resize-none" rows="2" oninput="markModelDirty('${m.key}')">{}</textarea>
-        </div>
-      `}
+      <div class="mt-3">
+        <label class="block text-xs font-medium text-gray-500 mb-1">Extra Config (JSON)</label>
+        <textarea class="model-extra-config w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none resize-none" rows="2" oninput="markModelDirty('${m.key}')">${escapeHtml(extraJson)}</textarea>
+      </div>
     </div>
-  `).join('');
+  `}).join('');
+}
+
+function applyPreset(modelKey, presetIndex) {
+  if (presetIndex === '') return;
+  const presets = MODEL_PRESETS[modelKey];
+  if (!presets) return;
+  const preset = presets[parseInt(presetIndex)];
+  if (!preset) return;
+
+  const card = document.getElementById(`model-${modelKey}`);
+  if (!card) return;
+
+  card.querySelector('.model-provider').value = preset.provider;
+  card.querySelector('.model-model-id').value = preset.model_id;
+  card.querySelector('.model-display-name').value = preset.display_name;
+  markModelDirty(modelKey);
 }
 
 function markModelDirty(key) {
