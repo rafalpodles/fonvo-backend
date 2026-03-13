@@ -112,6 +112,9 @@
         <button id="tabModels" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="switchTab('models')">
           Models
         </button>
+        <button id="tabScenarios" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="switchTab('scenarios')">
+          Scenarios
+        </button>
       </nav>
     </div>
 
@@ -231,6 +234,126 @@
             <div class="text-center text-gray-400 py-12">Loading models...</div>
           </div>
         </div>
+      </div>
+
+      <!-- === SCENARIOS TAB === -->
+      <div id="scenariosTab" class="flex-1 hidden flex">
+        <!-- Sidebar: scenario list -->
+        <aside class="w-80 bg-sidebar-bg border-r border-gray-700 flex flex-col shrink-0">
+          <div class="p-3 border-b border-gray-700 flex gap-2">
+            <input id="scenarioSearch" type="text" placeholder="Search scenarios..." class="flex-1 bg-sidebar-hover text-sidebar-text text-sm rounded-lg px-3 py-2 border border-gray-600 focus:border-brand-500 focus:outline-none placeholder-sidebar-muted" oninput="filterScenarios()">
+            <button onclick="newScenario()" class="px-3 py-2 bg-brand-500 text-white text-sm rounded-lg hover:bg-brand-600 transition-colors" title="New scenario">+</button>
+          </div>
+          <div class="p-3 border-b border-gray-700 flex gap-2">
+            <select id="scenarioCategoryFilter" onchange="filterScenarios()" class="flex-1 bg-sidebar-hover text-sidebar-text text-sm rounded-lg px-2 py-1.5 border border-gray-600 focus:border-brand-500 focus:outline-none">
+              <option value="">All categories</option>
+            </select>
+            <select id="scenarioLevelFilter" onchange="filterScenarios()" class="bg-sidebar-hover text-sidebar-text text-sm rounded-lg px-2 py-1.5 border border-gray-600 focus:border-brand-500 focus:outline-none">
+              <option value="">All levels</option>
+              <option value="a1">A1</option>
+              <option value="a2">A2</option>
+              <option value="b1">B1</option>
+              <option value="b2">B2</option>
+              <option value="c1">C1</option>
+              <option value="c2">C2</option>
+            </select>
+          </div>
+          <div id="scenarioList" class="flex-1 overflow-y-auto py-2">
+            <div class="px-3 py-4 text-center text-sidebar-muted text-sm">Loading scenarios...</div>
+          </div>
+        </aside>
+
+        <!-- Editor -->
+        <main class="flex-1 flex flex-col overflow-hidden">
+          <div id="scenarioEmpty" class="flex-1 flex items-center justify-center text-gray-400">
+            <div class="text-center">
+              <svg class="w-16 h-16 mx-auto mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+              </svg>
+              <p class="text-sm">Select a scenario to edit or click + to create</p>
+            </div>
+          </div>
+
+          <div id="scenarioForm" class="flex-1 flex flex-col overflow-hidden hidden">
+            <!-- Toolbar -->
+            <div class="px-6 py-4 border-b border-gray-200 bg-white flex items-center justify-between shrink-0">
+              <div>
+                <h2 id="scenarioTitle" class="font-semibold text-lg text-gray-800"></h2>
+                <p id="scenarioMeta" class="text-xs text-gray-400 mt-1"></p>
+              </div>
+              <div class="flex items-center gap-3">
+                <label class="flex items-center gap-2 text-sm">
+                  <input type="checkbox" id="scenarioActive" onchange="markScenarioDirty()" class="rounded border-gray-300 text-brand-500 focus:ring-brand-500">
+                  Active
+                </label>
+                <span id="scenarioUnsaved" class="text-xs text-brand-600 font-medium hidden">Unsaved</span>
+                <button id="scenarioSaveBtn" onclick="saveScenario()" class="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 disabled:opacity-50 transition-colors">Save</button>
+              </div>
+            </div>
+
+            <!-- Form content -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-5">
+              <!-- Row: ID + Icon + Category -->
+              <div class="grid grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">ID (slug)</label>
+                  <input id="scenarioId" type="text" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:border-brand-500 focus:outline-none" oninput="markScenarioDirty()" placeholder="e.g. cafe">
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Icon (SF Symbol)</label>
+                  <input id="scenarioIcon" type="text" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:border-brand-500 focus:outline-none" oninput="markScenarioDirty()" placeholder="e.g. cup.and.saucer.fill">
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                  <input id="scenarioCategory" type="text" list="categoryOptions" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-brand-500 focus:outline-none" oninput="markScenarioDirty()" placeholder="e.g. travel">
+                  <datalist id="categoryOptions"></datalist>
+                </div>
+              </div>
+
+              <!-- Row: Min Level + Max Level + Sort Order -->
+              <div class="grid grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Minimum Level</label>
+                  <select id="scenarioMinLevel" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-brand-500 focus:outline-none" onchange="markScenarioDirty()">
+                    <option value="a1">A1</option><option value="a2">A2</option>
+                    <option value="b1">B1</option><option value="b2">B2</option>
+                    <option value="c1">C1</option><option value="c2">C2</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Maximum Level</label>
+                  <select id="scenarioMaxLevel" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-brand-500 focus:outline-none" onchange="markScenarioDirty()">
+                    <option value="a1">A1</option><option value="a2">A2</option>
+                    <option value="b1">B1</option><option value="b2">B2</option>
+                    <option value="c1">C1</option><option value="c2" selected>C2</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Sort Order</label>
+                  <input id="scenarioSortOrder" type="number" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-brand-500 focus:outline-none" oninput="markScenarioDirty()" value="0">
+                </div>
+              </div>
+
+              <!-- System Prompt Addition -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">System Prompt Addition (English, injected into AI)</label>
+                <textarea id="scenarioPrompt" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-brand-500 focus:outline-none resize-y" oninput="markScenarioDirty()"></textarea>
+              </div>
+
+              <!-- Translations -->
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <label class="block text-sm font-medium text-gray-700">Translations</label>
+                  <button onclick="addScenarioLocale()" class="px-2 py-1 text-xs bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors">+ Add language</button>
+                </div>
+                <!-- Locale tabs -->
+                <div id="scenarioLocaleTabs" class="flex gap-1 mb-3 flex-wrap"></div>
+                <!-- Locale content -->
+                <div id="scenarioLocaleContent" class="space-y-3"></div>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
 
     </div>

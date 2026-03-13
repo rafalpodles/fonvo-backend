@@ -10,9 +10,14 @@ let authToken = localStorage.getItem('fonvo_admin_token');
 // State
 let prompts = [];
 let models = [];
+let scenarios = [];
 let selectedPromptKey = null;
+let selectedScenarioId = null;
+let scenarioIsNew = false;
+let activeScenarioLocale = 'en';
 let dirtyPrompts = new Set();
 let dirtyModels = new Set();
+let scenarioDirty = false;
 let currentTab = 'prompts';
 
 // Model presets for quick selection in admin UI
@@ -197,6 +202,7 @@ function switchTab(tab) {
   currentTab = tab;
   document.getElementById('promptsTab').classList.toggle('hidden', tab !== 'prompts');
   document.getElementById('modelsTab').classList.toggle('hidden', tab !== 'models');
+  document.getElementById('scenariosTab').classList.toggle('hidden', tab !== 'scenarios');
 
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.remove('active');
@@ -204,10 +210,15 @@ function switchTab(tab) {
     btn.classList.add('border-transparent', 'text-gray-500');
   });
 
-  const activeBtn = document.getElementById(tab === 'prompts' ? 'tabPrompts' : 'tabModels');
+  const btnMap = { prompts: 'tabPrompts', models: 'tabModels', scenarios: 'tabScenarios' };
+  const activeBtn = document.getElementById(btnMap[tab]);
   activeBtn.classList.add('active');
   activeBtn.classList.remove('border-transparent', 'text-gray-500');
   activeBtn.classList.add('border-brand-500', 'text-brand-700');
+
+  if (tab === 'scenarios' && scenarios.length === 0) {
+    loadScenarios();
+  }
 }
 
 // ============================================================
@@ -531,6 +542,325 @@ async function saveModel(key) {
 }
 
 // ============================================================
+// Scenarios
+// ============================================================
+
+async function loadScenarios() {
+  try {
+    scenarios = await apiGet('/admin/scenarios');
+    scenarios.sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
+    renderScenarioList();
+    updateCategoryFilter();
+    setConnectionStatus(true);
+  } catch (err) {
+    if (err.message === 'Unauthorized') return;
+    console.error('Failed to load scenarios:', err);
+    setConnectionStatus(false);
+    showToast('Failed to load scenarios', 'error');
+  }
+}
+
+function updateCategoryFilter() {
+  const categories = [...new Set(scenarios.map(s => s.category))].sort();
+  const select = document.getElementById('scenarioCategoryFilter');
+  const current = select.value;
+  select.innerHTML = '<option value="">All categories</option>' +
+    categories.map(c => `<option value="${c}">${c}</option>`).join('');
+  select.value = current;
+
+  // Also update datalist for category input
+  const datalist = document.getElementById('categoryOptions');
+  if (datalist) {
+    datalist.innerHTML = categories.map(c => `<option value="${c}">`).join('');
+  }
+}
+
+function renderScenarioList() {
+  const container = document.getElementById('scenarioList');
+  const search = document.getElementById('scenarioSearch').value.toLowerCase();
+  const catFilter = document.getElementById('scenarioCategoryFilter').value;
+  const levelFilter = document.getElementById('scenarioLevelFilter').value;
+
+  let filtered = scenarios.filter(s => {
+    if (search && !s.id.includes(search) && !(s.name.en || '').toLowerCase().includes(search)) return false;
+    if (catFilter && s.category !== catFilter) return false;
+    if (levelFilter && s.minimum_level !== levelFilter) return false;
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="px-3 py-4 text-center text-sidebar-muted text-sm">No scenarios found</div>';
+    return;
+  }
+
+  // Group by category
+  const grouped = {};
+  for (const s of filtered) {
+    if (!grouped[s.category]) grouped[s.category] = [];
+    grouped[s.category].push(s);
+  }
+
+  let html = '';
+  for (const [cat, items] of Object.entries(grouped)) {
+    html += `<div class="prompt-category">${cat}</div>`;
+    for (const s of items) {
+      const isActive = s.id === selectedScenarioId;
+      const name = s.name.en || s.id;
+      const inactive = !s.is_active ? ' opacity-50' : '';
+      html += `<div class="prompt-item${isActive ? ' active' : ''}${inactive}" onclick="selectScenario('${s.id}')" title="${s.id}">
+        <span class="text-xs font-mono text-sidebar-muted mr-1">${s.minimum_level.toUpperCase()}</span> ${escapeHtml(name)}
+      </div>`;
+    }
+  }
+  container.innerHTML = html;
+}
+
+function filterScenarios() {
+  renderScenarioList();
+}
+
+function selectScenario(id) {
+  selectedScenarioId = id;
+  scenarioIsNew = false;
+  const s = scenarios.find(x => x.id === id);
+  if (!s) return;
+
+  document.getElementById('scenarioEmpty').classList.add('hidden');
+  document.getElementById('scenarioForm').classList.remove('hidden');
+
+  document.getElementById('scenarioTitle').textContent = s.name.en || s.id;
+  document.getElementById('scenarioId').value = s.id;
+  document.getElementById('scenarioId').disabled = true;
+  document.getElementById('scenarioIcon').value = s.icon;
+  document.getElementById('scenarioCategory').value = s.category;
+  document.getElementById('scenarioMinLevel').value = s.minimum_level;
+  document.getElementById('scenarioMaxLevel').value = s.maximum_level;
+  document.getElementById('scenarioSortOrder').value = s.sort_order;
+  document.getElementById('scenarioPrompt').value = s.system_prompt_addition;
+  document.getElementById('scenarioActive').checked = s.is_active;
+
+  const meta = [];
+  if (s.created_at) meta.push(`Created: ${formatDate(s.created_at)}`);
+  if (s.updated_at) meta.push(`Updated: ${formatDate(s.updated_at)}`);
+  document.getElementById('scenarioMeta').textContent = meta.join(' · ');
+
+  // Translations
+  renderScenarioLocales(s.name, s.goals);
+  scenarioDirty = false;
+  document.getElementById('scenarioUnsaved').classList.add('hidden');
+  renderScenarioList();
+}
+
+function newScenario() {
+  selectedScenarioId = null;
+  scenarioIsNew = true;
+
+  document.getElementById('scenarioEmpty').classList.add('hidden');
+  document.getElementById('scenarioForm').classList.remove('hidden');
+
+  document.getElementById('scenarioTitle').textContent = 'New Scenario';
+  document.getElementById('scenarioId').value = '';
+  document.getElementById('scenarioId').disabled = false;
+  document.getElementById('scenarioIcon').value = '';
+  document.getElementById('scenarioCategory').value = '';
+  document.getElementById('scenarioMinLevel').value = 'a1';
+  document.getElementById('scenarioMaxLevel').value = 'c2';
+  document.getElementById('scenarioSortOrder').value = '0';
+  document.getElementById('scenarioPrompt').value = '';
+  document.getElementById('scenarioActive').checked = true;
+  document.getElementById('scenarioMeta').textContent = '';
+
+  renderScenarioLocales({ en: '' }, { en: ['', '', ''] });
+  scenarioDirty = false;
+  document.getElementById('scenarioUnsaved').classList.add('hidden');
+}
+
+function renderScenarioLocales(nameObj, goalsObj) {
+  const locales = [...new Set([...Object.keys(nameObj || {}), ...Object.keys(goalsObj || {})])].sort();
+  if (!locales.includes('en')) locales.unshift('en');
+  if (!locales.includes(activeScenarioLocale)) activeScenarioLocale = 'en';
+
+  // Tabs
+  const tabsHtml = locales.map(loc => {
+    const isActive = loc === activeScenarioLocale;
+    const hasName = nameObj[loc] && nameObj[loc].trim();
+    const hasGoals = goalsObj[loc] && goalsObj[loc].length > 0 && goalsObj[loc].some(g => g.trim());
+    const complete = hasName && hasGoals;
+    const dot = !complete && loc !== 'en' ? '<span class="w-1.5 h-1.5 rounded-full bg-red-400 ml-1"></span>' : '';
+    return `<button onclick="switchScenarioLocale('${loc}')" class="px-3 py-1.5 text-xs font-medium rounded-lg flex items-center gap-1 transition-colors ${isActive ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}">${loc.toUpperCase()}${dot}</button>`;
+  }).join('');
+  document.getElementById('scenarioLocaleTabs').innerHTML = tabsHtml;
+
+  // Content for active locale
+  const name = (nameObj || {})[activeScenarioLocale] || '';
+  const goals = (goalsObj || {})[activeScenarioLocale] || ['', '', ''];
+  const goalsArr = Array.isArray(goals) ? goals : [];
+
+  let contentHtml = `
+    <div>
+      <label class="block text-xs font-medium text-gray-500 mb-1">Name (${activeScenarioLocale.toUpperCase()})</label>
+      <input id="scenarioLocaleName" type="text" value="${escapeAttr(name)}" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-brand-500 focus:outline-none" oninput="markScenarioDirty()">
+    </div>
+  `;
+  for (let i = 0; i < 3; i++) {
+    contentHtml += `
+      <div>
+        <label class="block text-xs font-medium text-gray-500 mb-1">Goal ${i + 1} (${activeScenarioLocale.toUpperCase()})</label>
+        <input id="scenarioLocaleGoal${i}" type="text" value="${escapeAttr(goalsArr[i] || '')}" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-brand-500 focus:outline-none" oninput="markScenarioDirty()">
+      </div>
+    `;
+  }
+  document.getElementById('scenarioLocaleContent').innerHTML = contentHtml;
+}
+
+function switchScenarioLocale(locale) {
+  // Save current locale data before switching
+  saveCurrentLocaleToMemory();
+  activeScenarioLocale = locale;
+  // Re-render with stored data
+  const data = getScenarioTranslationData();
+  renderScenarioLocales(data.name, data.goals);
+}
+
+function saveCurrentLocaleToMemory() {
+  // Read current form values and store them in the scenario object or a temp store
+  const nameInput = document.getElementById('scenarioLocaleName');
+  const goalInputs = [0, 1, 2].map(i => document.getElementById(`scenarioLocaleGoal${i}`));
+  if (!nameInput) return;
+
+  const loc = activeScenarioLocale;
+  if (scenarioIsNew || !selectedScenarioId) {
+    if (!window._scenarioTranslations) window._scenarioTranslations = { name: {}, goals: {} };
+    window._scenarioTranslations.name[loc] = nameInput.value;
+    window._scenarioTranslations.goals[loc] = goalInputs.map(el => el ? el.value : '');
+  } else {
+    const s = scenarios.find(x => x.id === selectedScenarioId);
+    if (s) {
+      s.name[loc] = nameInput.value;
+      if (!s.goals[loc]) s.goals[loc] = [];
+      s.goals[loc] = goalInputs.map(el => el ? el.value : '');
+    }
+  }
+}
+
+function getScenarioTranslationData() {
+  if (scenarioIsNew || !selectedScenarioId) {
+    const t = window._scenarioTranslations || { name: { en: '' }, goals: { en: ['', '', ''] } };
+    return t;
+  }
+  const s = scenarios.find(x => x.id === selectedScenarioId);
+  return s ? { name: s.name, goals: s.goals } : { name: { en: '' }, goals: { en: ['', '', ''] } };
+}
+
+function addScenarioLocale() {
+  const locale = prompt('Enter locale code (e.g. pl, es, de):');
+  if (!locale || locale.length < 2) return;
+  const loc = locale.toLowerCase().trim();
+
+  saveCurrentLocaleToMemory();
+
+  const data = getScenarioTranslationData();
+  if (!data.name[loc]) data.name[loc] = '';
+  if (!data.goals[loc]) data.goals[loc] = ['', '', ''];
+
+  if (scenarioIsNew) {
+    if (!window._scenarioTranslations) window._scenarioTranslations = data;
+    window._scenarioTranslations.name[loc] = '';
+    window._scenarioTranslations.goals[loc] = ['', '', ''];
+  } else {
+    const s = scenarios.find(x => x.id === selectedScenarioId);
+    if (s) {
+      s.name[loc] = '';
+      s.goals[loc] = ['', '', ''];
+    }
+  }
+
+  activeScenarioLocale = loc;
+  const updatedData = getScenarioTranslationData();
+  renderScenarioLocales(updatedData.name, updatedData.goals);
+  markScenarioDirty();
+}
+
+function markScenarioDirty() {
+  scenarioDirty = true;
+  document.getElementById('scenarioUnsaved').classList.remove('hidden');
+}
+
+async function saveScenario() {
+  saveCurrentLocaleToMemory();
+
+  const id = document.getElementById('scenarioId').value.trim();
+  if (!id) {
+    showToast('Scenario ID is required', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('scenarioSaveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  try {
+    const data = getScenarioTranslationData();
+
+    if (scenarioIsNew) {
+      const body = {
+        id,
+        icon: document.getElementById('scenarioIcon').value.trim(),
+        category: document.getElementById('scenarioCategory').value.trim(),
+        minimum_level: document.getElementById('scenarioMinLevel').value,
+        maximum_level: document.getElementById('scenarioMaxLevel').value,
+        system_prompt_addition: document.getElementById('scenarioPrompt').value,
+        sort_order: parseInt(document.getElementById('scenarioSortOrder').value) || 0,
+        name: data.name,
+        goals: data.goals,
+      };
+
+      const res = await fetch(`${API_BASE}/admin/scenarios`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(body),
+      });
+      if (res.status === 401) { handleLogout(); throw new Error('Unauthorized'); }
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || `Create failed: ${res.status}`);
+      }
+
+      showToast('Scenario created', 'success');
+      window._scenarioTranslations = null;
+      await loadScenarios();
+      selectScenario(id);
+    } else {
+      const body = {
+        icon: document.getElementById('scenarioIcon').value.trim(),
+        category: document.getElementById('scenarioCategory').value.trim(),
+        minimum_level: document.getElementById('scenarioMinLevel').value,
+        maximum_level: document.getElementById('scenarioMaxLevel').value,
+        system_prompt_addition: document.getElementById('scenarioPrompt').value,
+        sort_order: parseInt(document.getElementById('scenarioSortOrder').value) || 0,
+        is_active: document.getElementById('scenarioActive').checked,
+        name: data.name,
+        goals: data.goals,
+      };
+
+      await apiPut(`/admin/scenarios/${selectedScenarioId}`, body);
+      showToast('Scenario saved', 'success');
+      await loadScenarios();
+      selectScenario(selectedScenarioId);
+    }
+
+    scenarioDirty = false;
+    document.getElementById('scenarioUnsaved').classList.add('hidden');
+  } catch (err) {
+    console.error('Save failed:', err);
+    showToast(`Save failed: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save';
+  }
+}
+
+// ============================================================
 // UI helpers
 // ============================================================
 
@@ -597,6 +927,8 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     if (currentTab === 'prompts' && selectedPromptKey) {
       saveCurrentPrompt();
+    } else if (currentTab === 'scenarios' && (selectedScenarioId || scenarioIsNew)) {
+      saveScenario();
     }
   }
 });

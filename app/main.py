@@ -11,7 +11,7 @@ from app.config import settings
 from app.db.connection import close_pool, init_pool
 from app.middleware.error_handler import global_exception_handler
 from app.middleware.logging import RequestLoggingMiddleware
-from app.routers import admin, ai, config, conversations, health, preferences, profiles, streaks, vocabulary
+from app.routers import admin, ai, config, conversations, health, preferences, profiles, scenarios, streaks, vocabulary
 
 logging.basicConfig(
     level=logging.INFO,
@@ -52,6 +52,7 @@ app.include_router(preferences.router, prefix="/api/v1")
 app.include_router(profiles.router, prefix="/api/v1")
 app.include_router(ai.router, prefix="/api/v1")
 app.include_router(config.router, prefix="/api/v1")
+app.include_router(scenarios.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
 
 # Serve admin UI static files
