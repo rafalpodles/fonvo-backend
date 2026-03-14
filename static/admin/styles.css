@@ -136,8 +136,18 @@
 /* Tab button states */
 .tab-btn {
   transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
 }
 .tab-btn.active {
   color: #b45309 !important;
   border-color: #f59e0b !important;
+}
+
+/* Mobile sidebar */
+@media (max-width: 767px) {
+  .mobile-sidebar {
+    top: 0;
+    bottom: 0;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
 }

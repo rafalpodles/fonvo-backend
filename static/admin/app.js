@@ -273,6 +273,7 @@ function filterPrompts() {
 
 function selectPrompt(key) {
   selectedPromptKey = key;
+  closeMobileSidebar();
   const prompt = prompts.find(p => p.key === key);
   if (!prompt) return;
 
@@ -622,6 +623,7 @@ function filterScenarios() {
 function selectScenario(id) {
   selectedScenarioId = id;
   scenarioIsNew = false;
+  closeMobileSidebar();
   const s = scenarios.find(x => x.id === id);
   if (!s) return;
 
@@ -939,6 +941,41 @@ document.addEventListener('keydown', (e) => {
 
 async function init() {
   await Promise.all([loadPrompts(), loadModels()]);
+}
+
+// Mobile sidebar toggle
+function toggleMobileSidebar() {
+  const sidebars = document.querySelectorAll('.mobile-sidebar');
+  const overlays = [document.getElementById('promptsSidebarOverlay'), document.getElementById('scenariosSidebarOverlay')];
+
+  const anyOpen = Array.from(sidebars).some(s => !s.classList.contains('-translate-x-full') || s.classList.contains('translate-x-0'));
+  // On md+ screens, sidebars are always visible via md:translate-x-0, so only toggle on mobile
+  if (window.innerWidth >= 768) return;
+
+  sidebars.forEach(s => {
+    if (anyOpen && !s.classList.contains('-translate-x-full')) {
+      s.classList.add('-translate-x-full');
+    } else {
+      s.classList.remove('-translate-x-full');
+    }
+  });
+
+  overlays.forEach(o => {
+    if (o) {
+      if (anyOpen) {
+        o.classList.add('hidden');
+      } else {
+        o.classList.remove('hidden');
+      }
+    }
+  });
+}
+
+// Close sidebar when selecting an item on mobile
+function closeMobileSidebar() {
+  if (window.innerWidth >= 768) return;
+  document.querySelectorAll('.mobile-sidebar').forEach(s => s.classList.add('-translate-x-full'));
+  document.querySelectorAll('[id$="SidebarOverlay"]').forEach(o => o.classList.add('hidden'));
 }
 
 // Check for existing token on page load

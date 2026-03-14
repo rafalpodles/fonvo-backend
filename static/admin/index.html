@@ -87,16 +87,19 @@
   <div id="mainApp" class="flex-1 flex flex-col overflow-hidden hidden">
 
     <!-- Header -->
-    <header class="bg-sidebar-bg border-b border-gray-700 px-6 py-3 flex items-center justify-between shrink-0">
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center">
+    <header class="bg-sidebar-bg border-b border-gray-700 px-4 md:px-6 py-3 flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-2 md:gap-3 min-w-0">
+        <button onclick="toggleMobileSidebar()" class="md:hidden text-sidebar-text p-1.5 rounded-lg hover:bg-sidebar-hover" aria-label="Toggle sidebar">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <div class="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center shrink-0">
           <span class="text-white font-bold text-sm">F</span>
         </div>
-        <h1 class="text-white font-semibold text-lg">Fonvo Admin</h1>
-        <span class="text-sidebar-muted text-sm">— AI Configuration</span>
+        <h1 class="text-white font-semibold text-lg hidden sm:block">Fonvo Admin</h1>
+        <span class="text-sidebar-muted text-sm hidden lg:inline">— AI Configuration</span>
       </div>
-      <div class="flex items-center gap-3">
-        <span id="connectionStatus" class="text-xs px-2 py-1 rounded-full bg-gray-700 text-sidebar-muted">Connecting...</span>
+      <div class="flex items-center gap-2 md:gap-3">
+        <span id="connectionStatus" class="text-xs px-2 py-1 rounded-full bg-gray-700 text-sidebar-muted hidden sm:inline-flex">Connecting...</span>
         <button onclick="handleLogout()" class="text-xs px-3 py-1.5 rounded-lg bg-gray-700 text-sidebar-muted hover:bg-gray-600 hover:text-sidebar-text transition-colors">
           Log out
         </button>
@@ -104,7 +107,7 @@
     </header>
 
     <!-- Tabs -->
-    <div class="bg-white border-b border-gray-200 px-6 shrink-0">
+    <div class="bg-white border-b border-gray-200 px-4 md:px-6 shrink-0 overflow-x-auto">
       <nav class="flex gap-1">
         <button id="tabPrompts" class="tab-btn active px-4 py-3 text-sm font-medium border-b-2 border-brand-500 text-brand-700" onclick="switchTab('prompts')">
           Prompts
@@ -122,10 +125,12 @@
     <div class="flex-1 flex overflow-hidden">
 
       <!-- === PROMPTS TAB === -->
-      <div id="promptsTab" class="flex-1 flex">
+      <div id="promptsTab" class="flex-1 flex relative">
 
+        <!-- Mobile overlay -->
+        <div id="promptsSidebarOverlay" class="hidden fixed inset-0 bg-black/50 z-30 md:hidden" onclick="toggleMobileSidebar()"></div>
         <!-- Sidebar -->
-        <aside class="w-72 bg-sidebar-bg border-r border-gray-700 flex flex-col shrink-0">
+        <aside id="promptsSidebar" class="mobile-sidebar w-72 bg-sidebar-bg border-r border-gray-700 flex flex-col shrink-0 fixed md:relative inset-y-0 left-0 z-40 -translate-x-full md:translate-x-0 transition-transform duration-200">
           <!-- Search -->
           <div class="p-3 border-b border-gray-700">
             <input
@@ -157,7 +162,7 @@
           <!-- Editor form (hidden by default) -->
           <div id="promptForm" class="flex-1 flex flex-col overflow-hidden hidden">
             <!-- Toolbar -->
-            <div class="px-6 py-4 border-b border-gray-200 bg-white flex items-center justify-between shrink-0">
+            <div class="px-4 md:px-6 py-3 md:py-4 border-b border-gray-200 bg-white flex flex-wrap items-center justify-between gap-2 shrink-0">
               <div>
                 <h2 id="promptKey" class="font-mono text-lg font-semibold text-gray-800"></h2>
                 <p id="promptMeta" class="text-xs text-gray-400 mt-1"></p>
@@ -171,7 +176,7 @@
             </div>
 
             <!-- Scrollable content -->
-            <div class="flex-1 overflow-y-auto p-6 space-y-5">
+            <div class="flex-1 overflow-y-auto p-4 md:p-6 space-y-5">
               <!-- Description -->
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
@@ -237,9 +242,11 @@
       </div>
 
       <!-- === SCENARIOS TAB === -->
-      <div id="scenariosTab" class="flex-1 hidden flex">
+      <div id="scenariosTab" class="flex-1 hidden flex relative">
+        <!-- Mobile overlay -->
+        <div id="scenariosSidebarOverlay" class="hidden fixed inset-0 bg-black/50 z-30 md:hidden" onclick="toggleMobileSidebar()"></div>
         <!-- Sidebar: scenario list -->
-        <aside class="w-80 bg-sidebar-bg border-r border-gray-700 flex flex-col shrink-0">
+        <aside id="scenariosSidebar" class="mobile-sidebar w-72 md:w-80 bg-sidebar-bg border-r border-gray-700 flex flex-col shrink-0 fixed md:relative inset-y-0 left-0 z-40 -translate-x-full md:translate-x-0 transition-transform duration-200">
           <div class="p-3 border-b border-gray-700 flex gap-2">
             <input id="scenarioSearch" type="text" placeholder="Search scenarios..." class="flex-1 bg-sidebar-hover text-sidebar-text text-sm rounded-lg px-3 py-2 border border-gray-600 focus:border-brand-500 focus:outline-none placeholder-sidebar-muted" oninput="filterScenarios()">
             <button onclick="newScenario()" class="px-3 py-2 bg-brand-500 text-white text-sm rounded-lg hover:bg-brand-600 transition-colors" title="New scenario">+</button>
@@ -276,7 +283,7 @@
 
           <div id="scenarioForm" class="flex-1 flex flex-col overflow-hidden hidden">
             <!-- Toolbar -->
-            <div class="px-6 py-4 border-b border-gray-200 bg-white flex items-center justify-between shrink-0">
+            <div class="px-4 md:px-6 py-3 md:py-4 border-b border-gray-200 bg-white flex flex-wrap items-center justify-between gap-2 shrink-0">
               <div>
                 <h2 id="scenarioTitle" class="font-semibold text-lg text-gray-800"></h2>
                 <p id="scenarioMeta" class="text-xs text-gray-400 mt-1"></p>
@@ -292,9 +299,9 @@
             </div>
 
             <!-- Form content -->
-            <div class="flex-1 overflow-y-auto p-6 space-y-5">
+            <div class="flex-1 overflow-y-auto p-4 md:p-6 space-y-5">
               <!-- Row: ID + Icon + Category -->
-              <div class="grid grid-cols-3 gap-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">ID (slug)</label>
                   <input id="scenarioId" type="text" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:border-brand-500 focus:outline-none" oninput="markScenarioDirty()" placeholder="e.g. cafe">
@@ -311,7 +318,7 @@
               </div>
 
               <!-- Row: Min Level + Max Level + Sort Order -->
-              <div class="grid grid-cols-3 gap-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Minimum Level</label>
                   <select id="scenarioMinLevel" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-brand-500 focus:outline-none" onchange="markScenarioDirty()">
