@@ -3,6 +3,7 @@ import logging
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
+from app.auth.dependencies import get_user_or_guest
 from app.db.connection import get_pool
 from app.db.queries import scenarios as queries
 from app.middleware.admin_auth import require_admin
@@ -26,6 +27,7 @@ async def list_scenarios(
     level: str = "b1",
     locale: str = "en",
     pool: asyncpg.Pool = Depends(get_pool),
+    _caller=Depends(get_user_or_guest),
 ):
     """Get scenarios for a user's level with locale-resolved strings."""
     hash_val = await queries.get_scenarios_hash(pool)
