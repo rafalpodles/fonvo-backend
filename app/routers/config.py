@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from app.db.connection import get_pool
 from app.db.queries import config as queries
+from app.auth.dependencies import get_user_or_guest
 from app.middleware.admin_auth import require_admin
 from app.models.config import (
     ConfigBundle,
@@ -58,6 +59,7 @@ async def _get_bundle(pool: asyncpg.Pool) -> ConfigBundle:
 async def get_config_bundle(
     request: Request,
     pool: asyncpg.Pool = Depends(get_pool),
+    _caller=Depends(get_user_or_guest),
 ):
     """Return all active prompts and model configs with an ETag for caching."""
     bundle = await _get_bundle(pool)
