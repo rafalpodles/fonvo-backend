@@ -122,24 +122,6 @@ async def update_model_config(
     return result == "UPDATE 1"
 
 
-async def create_model_config(
-    pool: asyncpg.Pool, key: str, data: ModelConfigUpdateRequest
-) -> bool:
-    try:
-        await pool.execute(
-            "INSERT INTO ai_model_config (key, provider, model_id, display_name, extra_config) "
-            "VALUES ($1, $2, $3, $4, $5)",
-            key,
-            data.provider or "",
-            data.model_id or "",
-            data.display_name,
-            json.dumps(data.extra_config) if data.extra_config else "{}",
-        )
-        return True
-    except asyncpg.UniqueViolationError:
-        return False
-
-
 async def delete_prompt(pool: asyncpg.Pool, key: str) -> bool:
     result = await pool.execute(
         "UPDATE ai_prompts SET is_active = false, updated_at = now() WHERE key = $1 AND is_active = true",
