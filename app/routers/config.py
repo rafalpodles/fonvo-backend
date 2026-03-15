@@ -134,6 +134,26 @@ async def list_models(
     return await queries.get_all_active_models(pool)
 
 
+@router.post("/models/{key:path}", response_model=ModelConfigResponse, status_code=201)
+async def create_model_config(
+    key: str,
+    body: ModelConfigUpdateRequest,
+    pool: asyncpg.Pool = Depends(get_pool),
+    _admin: str = Depends(require_admin),
+):
+    """Create a new model config (admin)."""
+    created = await queries.create_model_config(pool, key, body)
+    if not created:
+        raise HTTPException(status_code=409, detail=f"Model config '{key}' already exists")
+    _invalidate_cache()
+
+    models = await queries.get_all_active_models(pool)
+    model = next((m for m in models if m.key == key), None)
+    if not model:
+        raise HTTPException(status_code=500, detail="Created but not found")
+    return model
+
+
 @router.put("/models/{key:path}", response_model=ModelConfigResponse)
 async def update_model_config(
     key: str,
