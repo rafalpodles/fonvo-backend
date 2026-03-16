@@ -213,6 +213,15 @@
                   >
                   <button onclick="addPlaceholder()" class="px-3 py-1.5 text-sm bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors">Add</button>
                 </div>
+                <details class="mt-2">
+                  <summary class="text-xs text-gray-400 cursor-pointer hover:text-gray-600">Available placeholders</summary>
+                  <div class="mt-1 text-xs text-gray-500 bg-gray-50 rounded-lg p-3 space-y-1">
+                    <div><strong>Always available (base context):</strong></div>
+                    <div class="font-mono">{language} {character_name} {device_language}</div>
+                    <div class="mt-1"><strong>Context-specific (set by callsite):</strong></div>
+                    <div class="font-mono">{level} {topic} {word_list} {count} {exchanges_left} {error_types} {voice_note} {target_language} {goals_numbered}</div>
+                  </div>
+                </details>
               </div>
 
               <!-- Preview -->
